@@ -1,0 +1,37 @@
+# Core ML: torch/torchvision pinned as a matched pair with MPS (Apple Silicon) support.
+# Verify with: python -c "import torch; print(torch.backends.mps.is_available())"
+torch==2.13.0
+torchvision==0.28.0
+
+# Data handling
+pandas==3.0.5
+numpy==2.5.2
+opencv-python==5.0.0.93
+pydicom==3.0.2
+kagglehub==1.0.2
+Pillow==12.3.0
+
+# ML utilities
+scikit-learn==1.9.0
+
+# Viz
+matplotlib==3.11.1
+seaborn==0.13.2
+
+# Misc
+tqdm==4.70.0
+
+# Only needed for the original image-grid EDA in breast_cancer_eda_local.ipynb section 5
+imagesize==2.0.0
+colorama==0.4.6
+scipy==1.18.1
+
+# Notebooks (tqdm progress bars in Jupyter)
+ipywidgets==8.1.9
+
+# Pixel-level AUPRO for the Dinomaly2/MVTec-AD/VisA reproduction
+scikit-image==0.26.0
+
+# Dinomaly2's dataset.py (reused for MVTec-AD/VisA loading) imports these
+tifffile==2026.9.9
+natsort==8.4.0

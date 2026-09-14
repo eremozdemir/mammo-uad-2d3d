@@ -1,0 +1,22 @@
+# Dataset cache, downloaded/extracted locally, never committed
+# (anchored so it doesn't also match src/data/)
+/data/
+
+# Training outputs (checkpoints, logs, metrics)
+/runs/
+
+# Python
+__pycache__/
+*.pyc
+/.venv/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/

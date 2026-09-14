@@ -1,0 +1,6 @@
+[submodule "third_party/Dinomaly"]
+	path = third_party/Dinomaly
+	url = https://github.com/guojiajeremy/Dinomaly.git
+[submodule "third_party/Dinomaly2"]
+	path = third_party/Dinomaly2
+	url = https://github.com/guojiajeremy/Dinomaly2.git
