@@ -6,17 +6,17 @@ things changed in Dinomaly2's own architecture, both reused verbatim from the
 submodule via _ref2.py:
 
   - a two-stage "noisy bottleneck": compress to 256 (dropout), then expand
-    back through embed_dim*4 to embed_dim (GELU, dropout at every stage) --
-    replaces v1's single bMlp.
-  - context-aware recentering: the *encoder*-side reconstruction target has
+    back through embed_dim*4 to embed_dim (GELU, dropout at every stage),
+    replacing v1's single bMlp.
+  - context-aware recentering: the encoder-side reconstruction target has
     its own class token subtracted from every patch token, then LayerNorm,
-    before the cosine loss compares it against the decoder's output. Built
-    into Dinomaly2's `Dinomaly.forward`; we just pass context_aware_recenter=True.
+    before the cosine loss compares it against the decoder's output. This is
+    built into Dinomaly2's `Dinomaly.forward` and enabled by passing
+    context_aware_recenter=True.
 
 The decoder blocks (linear attention, eps-guarded) and the Dinomaly wrapper
-class are Dinomaly2's own code, not our v1 attention.py -- this is a
-reproduction, so fidelity to their exact math matters more than reusing our
-other module.
+class are Dinomaly2's own code, not v1's attention.py. Fidelity to the
+original math matters more than module reuse for a reproduction.
 """
 
 from functools import partial
@@ -32,15 +32,24 @@ N_DECODER_BLOCKS = 8
 
 
 def build_dinomaly2(backbone="vit_base", dropout=0.4, linear_attention=True,
-                     context_aware_recenter=True, fuse_groups=None):
+                     context_aware_recenter=True, fuse_groups=None, target_layers=None):
     """
     Returns (model, trainable, param_groups). `trainable` is the ModuleList of
     parameters the optimizer should see; `param_groups` is the list of dicts
     StableAdamW expects, with the bottleneck's first (compress) layer at its
     own lr and everything else at whatever base lr the caller sets on top.
+
+    `target_layers` overrides the default per-backbone depth selection. The
+    default ([2..9] of 12 blocks for vit_base) follows Dinomaly2's MVTec-AD
+    config and favors mid-depth, semantically structured features, which
+    suits anomalies defined by object or organ shape. For texture-dominated
+    domains without a canonical spatial layout, shallower layers preserve
+    more of the low-level statistics the anomaly signal depends on; see
+    `notebooks/bmad/bmad_dinomaly2_train.ipynb` section 7.
     """
     _, embed_dim, num_heads = BACKBONES[backbone]
-    target_layers = [4, 6, 8, 10, 12, 14, 16, 18] if backbone == "vit_large" else [2, 3, 4, 5, 6, 7, 8, 9]
+    default_layers = [4, 6, 8, 10, 12, 14, 16, 18] if backbone == "vit_large" else [2, 3, 4, 5, 6, 7, 8, 9]
+    target_layers = target_layers or default_layers
     fuse_groups = fuse_groups or FUSE_GROUPS
 
     encoder = load_encoder(backbone)
