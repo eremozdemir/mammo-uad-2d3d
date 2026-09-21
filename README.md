@@ -6,8 +6,10 @@ test time.
 
 **Current direction:** reproduce Dinomaly2's published results on its own benchmarks
 first (MVTec-AD, VisA), to validate the reimplementation against numbers that can be
-checked. Done (see [Reproducing Dinomaly2](#reproducing-dinomaly2)). Next is looking
-at architecture changes and applying the validated pipeline to CBIS-DDSM.
+checked. Done (see [Reproducing Dinomaly2](#reproducing-dinomaly2)). Now applying that
+validated, unmodified pipeline to [BMAD](#bmad-medical-anomaly-detection), a medical
+imaging anomaly-detection benchmark, to see how it generalizes out of domain before
+trying any architecture changes and porting the pipeline to CBIS-DDSM.
 
 - **Dinomaly** (CVPR 2025), the original Transformer reconstruction-based unsupervised
   anomaly detector using a DINOv2 backbone. Vendored at
@@ -64,6 +66,40 @@ python -m src.training.train_dinomaly2 --dataset visa
 Or `notebooks/dinomaly2_repro_mvtec_visa.ipynb`, which runs both and reports on them
 as it goes (loss/metric curves, per-category tables, paper comparison).
 
+## BMAD (medical anomaly detection)
+
+Applies the same Dinomaly2 recipe above, unmodified, to
+[BMAD](https://github.com/DorisBao/BMAD): six medical-imaging datasets (brain MRI,
+liver CT, two retinal OCT datasets, chest X-ray, histopathology), each already framed
+as normal-vs-abnormal anomaly detection. Unlike MVTec-AD/VisA there's no category
+dimension inside a modality, so each one trains its own single-class model rather than
+one multi-class model per benchmark.
+
+- `notebooks/bmad/bmad_eda.ipynb`: split sizes vs. what `src/data/bmad.py` expects,
+  image properties (mode/resolution) per modality, sample good/abnormal grids with
+  mask overlays where available.
+- `notebooks/bmad/bmad_dinomaly2_train.ipynb`: trains + evaluates every modality,
+  reports loss curves and an image-/pixel-level metrics table.
+- [src/data/bmad.py](src/data/bmad.py): per-modality loading. BMAD's own zip layout
+  is inconsistent across modalities (different upstream prep script per source
+  dataset), so folder capitalisation and mask availability are hardcoded per
+  modality rather than inferred.
+- [src/eval/bmad.py](src/eval/bmad.py): image-level metrics for every modality;
+  pixel-level metrics (P-AUROC/P-AP/P-F1/P-AUPRO) only for Brain, Liver and RESC,
+  the three that ship real pixel masks; Chest, Histopathology and OCT2017 are
+  image-level-only benchmarks.
+- [src/training/train_bmad.py](src/training/train_bmad.py): same StableAdamW /
+  warmup-then-constant-LR / hard-mining cosine loss recipe as
+  `train_dinomaly2.py`, trained per modality instead of per multi-class benchmark.
+
+```
+python -m src.training.train_bmad --modality brain --smoke   # ~150 iters, sanity check
+python -m src.training.train_bmad --modality chest           # full run
+```
+
+Data: place/symlink [BMAD](https://github.com/DorisBao/BMAD) at `data/BMAD/`, keeping
+its own per-modality folder structure (`<Modality>_AD/<dataset>/{train,test}/...`).
+
 ## CBIS-DDSM / mammography (paused)
 
 [CBIS-DDSM](https://www.kaggle.com/datasets/awsaf49/cbis-ddsm-breast-cancer-image-dataset),
@@ -90,14 +126,18 @@ notebooks/
   dinomaly_train_local.ipynb        # CBIS-DDSM: quick dev run
   dinomaly_full_train.ipynb         # CBIS-DDSM: full run, report, Dinomaly-v1-paper comparison
   dinomaly2_repro_mvtec_visa.ipynb  # MVTec-AD / VisA: full run, report, Dinomaly2-paper comparison
+  bmad/
+    bmad_eda.ipynb                  # BMAD: split sizes, image properties, sample grids
+    bmad_dinomaly2_train.ipynb      # BMAD: full run + report, per modality
 runs/                  # training checkpoints/logs, gitignored
 src/
   data/
     cbis_ddsm.py       # CBIS-DDSM loading, patient-level split
     mvtec_visa.py      # MVTec-AD / VisA loading (reuses Dinomaly2's dataset.py)
+    bmad.py             # BMAD loading, per-modality quirks
   models/
     dinomaly.py        # Dinomaly v1 build (CBIS-DDSM)
-    dinomaly2.py        # Dinomaly2 build (MVTec-AD / VisA reproduction)
+    dinomaly2.py        # Dinomaly2 build (MVTec-AD / VisA / BMAD, same by default; optional target_layers override for BMAD's architecture iteration)
     attention.py        # eps-guarded linear attention (v1 decoder)
     losses.py           # cosine reconstruction loss, hard mining (shared)
     lr_schedule.py       # warmup-cosine LR (v1 flavor, and v2's per-group ratio variant)
@@ -105,9 +145,11 @@ src/
   training/
     train_dinomaly.py    # CBIS-DDSM training loop
     train_dinomaly2.py   # MVTec-AD / VisA reproduction training loop
+    train_bmad.py         # BMAD training loop, one model per modality
   eval/
     anomaly.py           # image-level scoring (CBIS-DDSM; also used by pixel.py)
     pixel.py              # pixel-level metrics incl. AUPRO (MVTec-AD / VisA)
+    bmad.py               # image-level always, pixel-level only where BMAD has masks
 third_party/
   Dinomaly/              # v1 reference implementation, git submodule
   Dinomaly2/              # v2 reference implementation, git submodule
@@ -130,5 +172,7 @@ python -c "import torch; print(torch.backends.mps.is_available())"
 ## Current phase
 
 **Dinomaly2 reproduced on MVTec-AD and VisA**, both within 0.5 points of the paper's
-Table II across every image- and pixel-level metric. Next: architecture changes on top
-of Dinomaly2, then porting that back to CBIS-DDSM.
+Table II across every image- and pixel-level metric. **Now applying that pipeline,
+unmodified, to BMAD** (see [BMAD](#bmad-medical-anomaly-detection)) to see how it
+generalizes to medical imaging before changing anything. Next: architecture changes on
+top of Dinomaly2, then porting that back to CBIS-DDSM.
