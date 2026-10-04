@@ -21,6 +21,10 @@ trying any architecture changes and porting the pipeline to CBIS-DDSM.
   on MVTec-AD and VisA; this is the current base for further work.
 - **AnomalyMoE** (AAAI 2026), a Mixture-of-Experts anomaly detector with
   patch/component/global expert levels. Not started.
+- **AnomalyDINO-DPMM** (MICCAI 2025), a frozen-DINOv2 + Dirichlet Process Mixture
+  clustering baseline, applied to BMAD for comparison against Dinomaly2. No
+  trainable encoder/decoder; see [AnomalyDINO-DPMM](#anomalydino-dpmm-bmad) below.
+  Reference code vendored at [anomalydino-dpmm](anomalydino-dpmm).
 
 ## Reproducing Dinomaly2
 
@@ -100,6 +104,54 @@ python -m src.training.train_bmad --modality chest           # full run
 Data: place/symlink [BMAD](https://github.com/DorisBao/BMAD) at `data/BMAD/`, keeping
 its own per-modality folder structure (`<Modality>_AD/<dataset>/{train,test}/...`).
 
+## AnomalyDINO-DPMM (BMAD)
+
+A second, architecturally unrelated method applied to the same six BMAD modalities,
+for comparison against Dinomaly2 above:
+
+> Schulthess, N. and Konukoglu, E., "Anomaly Detection by Clustering DINO Embeddings
+> using a Dirichlet Process Mixture", MICCAI 2025.
+> https://papers.miccai.org/miccai-2025/paper/2425_paper.pdf
+>
+> ```bibtex
+> @InProceedings{Schulthess2025Anomaly,
+>     author = {Schulthess, Nico and Konukoglu, Ender},
+>     title = {{Anomaly Detection by Clustering DINO Embeddings using a
+>               Dirichlet Process Mixture}},
+>     booktitle = {MICCAI 2025},
+>     year = {2025},
+> }
+> ```
+
+No trainable encoder/decoder, no backpropagation: a frozen DINOv2 backbone
+(`dinov2_vits14`, matching the paper's own configs) extracts per-patch embeddings,
+and a truncated stick-breaking Dirichlet Process Mixture is fit to the normal
+training patches via online EM. A patch's anomaly score at test time is its negative
+log-likelihood under the fitted mixture. Reference code vendored at
+[anomalydino-dpmm](anomalydino-dpmm) (official release for the paper above, itself
+built on [AnomalyDINO](https://github.com/dammsi/AnomalyDINO), Apache 2.0; the
+anomalydino-dpmm repo itself is CC-BY-NC 4.0). Ported/adapted here rather than run
+as-is: see `src/models/dpmm.py` for what changed and why (notably a closed-form
+diagonal-Gaussian log-density path, needed to make fitting the K=500-component
+mixture the paper uses tractable off a CUDA cluster).
+
+- [src/models/dpmm.py](src/models/dpmm.py): the DPMM itself (stick-breaking mixture,
+  online E/M update).
+- [src/models/anomaly_dpmm.py](src/models/anomaly_dpmm.py): frozen DINOv2 patch
+  embedding extraction.
+- [src/eval/bmad_dpmm.py](src/eval/bmad_dpmm.py): same metric set and image-only vs.
+  image+pixel split as `src/eval/bmad.py`, scored from the DPMM's log-likelihood map
+  instead of a Dinomaly cosine-distance map.
+- [src/training/train_bmad_dpmm.py](src/training/train_bmad_dpmm.py): fits one DPMM
+  per modality; same val-selects/test-reports protocol as `train_bmad.py`.
+- `notebooks/bmad/bmad_dinomaly2_train.ipynb` section 8: runs all six modalities and
+  compares against the Dinomaly2 table above.
+
+```
+python -m src.training.train_bmad_dpmm --modality liver --smoke   # short sanity check
+python -m src.training.train_bmad_dpmm --modality brain           # full run
+```
+
 ## CBIS-DDSM / mammography (paused)
 
 [CBIS-DDSM](https://www.kaggle.com/datasets/awsaf49/cbis-ddsm-breast-cancer-image-dataset),
@@ -128,7 +180,7 @@ notebooks/
   dinomaly2_repro_mvtec_visa.ipynb  # MVTec-AD / VisA: full run, report, Dinomaly2-paper comparison
   bmad/
     bmad_eda.ipynb                  # BMAD: split sizes, image properties, sample grids
-    bmad_dinomaly2_train.ipynb      # BMAD: full run + report, per modality
+    bmad_dinomaly2_train.ipynb      # BMAD: Dinomaly2 (1-7) + AnomalyDINO-DPMM (8) runs + report
 runs/                  # training checkpoints/logs, gitignored
 src/
   data/
@@ -142,17 +194,22 @@ src/
     losses.py           # cosine reconstruction loss, hard mining (shared)
     lr_schedule.py       # warmup-cosine LR (v1 flavor, and v2's per-group ratio variant)
     _ref.py / _ref2.py   # bridges to the vendored Dinomaly / Dinomaly2 repos
+    dpmm.py               # AnomalyDINO-DPMM: the Dirichlet Process Mixture itself
+    anomaly_dpmm.py        # AnomalyDINO-DPMM: frozen DINOv2 patch embedding extraction
   training/
     train_dinomaly.py    # CBIS-DDSM training loop
     train_dinomaly2.py   # MVTec-AD / VisA reproduction training loop
     train_bmad.py         # BMAD training loop, one model per modality
+    train_bmad_dpmm.py     # BMAD training loop for AnomalyDINO-DPMM, one DPMM per modality
   eval/
     anomaly.py           # image-level scoring (CBIS-DDSM; also used by pixel.py)
     pixel.py              # pixel-level metrics incl. AUPRO (MVTec-AD / VisA)
     bmad.py               # image-level always, pixel-level only where BMAD has masks
+    bmad_dpmm.py            # same as bmad.py, scored from the DPMM's log-likelihood map
 third_party/
   Dinomaly/              # v1 reference implementation, git submodule
   Dinomaly2/              # v2 reference implementation, git submodule
+anomalydino-dpmm/        # AnomalyDINO-DPMM reference implementation (not yet a submodule)
 ```
 
 ## Setup
