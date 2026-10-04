@@ -4,3 +4,6 @@
 [submodule "third_party/Dinomaly2"]
 	path = third_party/Dinomaly2
 	url = https://github.com/guojiajeremy/Dinomaly2.git
+[submodule "anomalydino-dpmm"]
+	path = anomalydino-dpmm
+	url = https://github.com/NicoSchulthess/anomalydino-dpmm.git

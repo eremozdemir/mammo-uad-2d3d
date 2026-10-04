@@ -130,7 +130,7 @@ def train(config: BMADConfig, device=None, progress=True, on_eval=None):
     )
 
     out_dir = Path(config.out_dir) if config.out_dir else \
-        REPO_ROOT / "runs" / time.strftime(f"bmad_dinomaly2_{config.modality}_%Y%m%d_%H%M%S")
+        REPO_ROOT / "runs" / time.strftime(f"bmad_dinomaly2_{config.modality}_seed{config.seed}_%Y%m%d_%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "config.json").write_text(json.dumps(asdict(config), indent=2))
 
