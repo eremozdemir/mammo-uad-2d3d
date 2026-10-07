@@ -126,8 +126,10 @@ for comparison against Dinomaly2 above:
 No trainable encoder/decoder, no backpropagation: a frozen DINOv2 backbone
 (`dinov2_vits14`, matching the paper's own configs) extracts per-patch embeddings,
 and a truncated stick-breaking Dirichlet Process Mixture is fit to the normal
-training patches via online EM. A patch's anomaly score at test time is its negative
-log-likelihood under the fitted mixture. Reference code vendored at
+training patches via online EM. Notebook section 8 scores each patch by its negative
+log-likelihood under the fitted mixture; section 9 re-scores the same checkpoints with
+the paper's score (cosine distance to the nearest cluster) and reports pixel-level
+results in the layout of the paper's Tables 1-3. Reference code vendored at
 [anomalydino-dpmm](anomalydino-dpmm) (official release for the paper above, itself
 built on [AnomalyDINO](https://github.com/dammsi/AnomalyDINO), Apache 2.0; the
 anomalydino-dpmm repo itself is CC-BY-NC 4.0). Ported/adapted here rather than run
@@ -142,10 +144,18 @@ mixture the paper uses tractable off a CUDA cluster).
 - [src/eval/bmad_dpmm.py](src/eval/bmad_dpmm.py): same metric set and image-only vs.
   image+pixel split as `src/eval/bmad.py`, scored from the DPMM's log-likelihood map
   instead of a Dinomaly cosine-distance map.
+- [src/eval/bmad_dpmm_paper.py](src/eval/bmad_dpmm_paper.py): re-scores saved DPMM
+  checkpoints the way the paper's code does (no retraining); results cached in
+  `runs/bmad_dpmm_paper_eval/`.
 - [src/training/train_bmad_dpmm.py](src/training/train_bmad_dpmm.py): fits one DPMM
   per modality; same val-selects/test-reports protocol as `train_bmad.py`.
 - `notebooks/bmad/bmad_dinomaly2_train.ipynb` section 8: runs all six modalities and
-  compares against the Dinomaly2 table above.
+  compares against the Dinomaly2 table above. Section 9: pixel AUROC/AUPR/Dice against
+  the paper's published numbers.
+
+```
+python -m src.eval.bmad_dpmm_paper --modality brain liver retina_resc   # section 9 re-scoring
+```
 
 ```
 python -m src.training.train_bmad_dpmm --modality liver --smoke   # short sanity check
@@ -180,7 +190,7 @@ notebooks/
   dinomaly2_repro_mvtec_visa.ipynb  # MVTec-AD / VisA: full run, report, Dinomaly2-paper comparison
   bmad/
     bmad_eda.ipynb                  # BMAD: split sizes, image properties, sample grids
-    bmad_dinomaly2_train.ipynb      # BMAD: Dinomaly2 (1-7) + AnomalyDINO-DPMM (8) runs + report
+    bmad_dinomaly2_train.ipynb      # BMAD: Dinomaly2 (1-7) + AnomalyDINO-DPMM (8-9) runs + report
 runs/                  # training checkpoints/logs, gitignored
 src/
   data/
@@ -206,6 +216,7 @@ src/
     pixel.py              # pixel-level metrics incl. AUPRO (MVTec-AD / VisA)
     bmad.py               # image-level always, pixel-level only where BMAD has masks
     bmad_dpmm.py            # same as bmad.py, scored from the DPMM's log-likelihood map
+    bmad_dpmm_paper.py      # DPMM checkpoints re-scored the way the paper's code does
 third_party/
   Dinomaly/              # v1 reference implementation, git submodule
   Dinomaly2/              # v2 reference implementation, git submodule

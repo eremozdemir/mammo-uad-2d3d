@@ -23,10 +23,14 @@ anomalydino-dpmm repository is released under CC-BY-NC 4.0.
 This module keeps only what BMAD training/inference needs: a truncated
 stick-breaking DP mixture fit online (each `step` is one E/M update, with an
 exponentially-weighted or exp-decaying running average of the sufficient
-statistics -- see `schedule`), plus log-likelihood scoring for anomaly
-detection. Visualization, sampling, and the alternate distance-based scores
-in the original (used there for ablations) are dropped; only the
-log-likelihood anomaly score is used here (`sample_score`).
+statistics -- see `schedule`), plus patch-level anomaly scores. Training
+and section 8's original evaluation (src/eval/bmad_dpmm.py) use the
+log-likelihood (`sample_score`); the paper's own anomaly score (Sec. 2.2,
+Eq. 11) is the cosine distance to the nearest component mean
+(`cosine_distance_to_nearest_cluster`), with the Euclidean variant
+(`distance_to_nearest_cluster`) kept for its Table 3 ablation -- both ported
+from anomalydino-dpmm/src/DirichletProcessMixture/dpmm.py and used by
+src/eval/bmad_dpmm_paper.py. Visualization and sampling are dropped.
 """
 
 import math
@@ -186,6 +190,19 @@ class DPMM:
         data = data[:, None, :]
         weighted_log_prob = self.get_weighted_log_prob(data, weight_threshold)
         return torch.logsumexp(weighted_log_prob, dim=1)
+
+    def distance_to_nearest_cluster(self, data: torch.Tensor, weight_threshold: float = 0.0) -> torch.Tensor:
+        """data: NxD -> Euclidean distance to the nearest component mean with pi > weight_threshold, size N.
+        Official dpmm.py `distance_to_nearest_cluster(covariance_weighted_norm=False)`."""
+        means = self.mean[self.calculate_pi() > weight_threshold, :]
+        return torch.cdist(data, means, compute_mode="donot_use_mm_for_euclid_dist").amin(1)
+
+    def cosine_distance_to_nearest_cluster(self, data: torch.Tensor, weight_threshold: float = 0.0) -> torch.Tensor:
+        """data: NxD -> 1 - max_k cos(data, mean_k) over components with pi > weight_threshold, size N
+        (higher = more anomalous). Official dpmm.py `cosine_distance_to_nearest_cluster`; paper Eq. 11."""
+        means = self.mean[self.calculate_pi() > weight_threshold, :]
+        similarity = torch.nn.functional.normalize(data, dim=1) @ torch.nn.functional.normalize(means, dim=1).T
+        return 1 - similarity.amax(1)
 
     def e_step(self, data: torch.Tensor) -> torch.Tensor:
         return self.get_log_responsibilities(data)
