@@ -35,3 +35,9 @@ scikit-image==0.26.0
 # Dinomaly2's dataset.py (reused for MVTec-AD/VisA loading) imports these
 tifffile==2026.9.9
 natsort==8.4.0
+
+# PDD (notebooks/pdd): VMamba's file imports timm and fvcore; gdown fetches SQUID's
+# ZhangLab/CheXpert splits from Google Drive
+timm==1.0.30
+fvcore==0.1.5.post20221221
+gdown==6.4.2

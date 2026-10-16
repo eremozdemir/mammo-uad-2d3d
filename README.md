@@ -162,6 +162,41 @@ python -m src.training.train_bmad_dpmm --modality liver --smoke   # short sanity
 python -m src.training.train_bmad_dpmm --modality brain           # full run
 ```
 
+## PDD (medical anomaly detection benchmarks)
+
+Reproduction of PDD on the paper's own datasets and splits:
+
+> Lu, X., Liu, H., Shang, F., Hui, Y. and Wan, L., "PDD: Manifold-Prior Diverse
+> Distillation for Medical Anomaly Detection", CVPR 2026.
+> https://arxiv.org/abs/2603.07142, code: https://github.com/OxygenLu/PDD
+
+Two frozen teachers (VMamba-Tiny and Wide-ResNet50-2) fused by InA/MMU modules, and two
+students, one with an MLP prior; trained with distillation plus a diversity loss
+between the students. The official code is cloned at `PDD/` and imported unchanged.
+What had to change for Apple silicon (Triton stub, a chunked selective scan instead
+of the per-token Python fallback, contiguous VMamba features) is in
+`src/models/pdd.py`.
+
+- `notebooks/pdd/pdd_train.ipynb`: data, model checks, training for Tables 1 and 2,
+  Fig. 3c loss curves, Table 4 and Table 5 ablations, all against the paper's numbers.
+- [src/data/pdd_datasets.py](src/data/pdd_datasets.py): builds `data/PDD/`. HeadCT and
+  BrainMRI from the Kaggle pack `arktis2022/medical-anomaly-detection` (30 train
+  normals moved to test to match the paper's 60/40 and 58/40; the authors' choice of
+  images is unpublished, so a fixed seed picks them). ZhangLab and CheXpert from
+  SQUID's released splits. Uni-Medical from the local BMAD copy.
+- [src/training/train_pdd.py](src/training/train_pdd.py): the official recipe (100
+  epochs, batch 10, Adam 2e-3, cosine schedule with T_max=40, test evaluation every 10
+  epochs). Frozen VMamba features are cached per split in `data/PDD/_teacher_cache/`
+  (~45 GB), which takes a step from 1.15 s to 0.2 s.
+- [src/eval/pdd.py](src/eval/pdd.py): per-image metrics, plus the released
+  single-class script's batch-level metric (first image of each batch of 10 against
+  the batch's max label), reported side by side.
+
+```
+python -m src.training.train_pdd --dataset head_ct --smoke   # 2 epochs, sanity check
+python -m src.training.train_pdd --dataset uni_medical       # full run (~8 h on M4 Max)
+```
+
 ## CBIS-DDSM / mammography (paused)
 
 [CBIS-DDSM](https://www.kaggle.com/datasets/awsaf49/cbis-ddsm-breast-cancer-image-dataset),
@@ -191,12 +226,15 @@ notebooks/
   bmad/
     bmad_eda.ipynb                  # BMAD: split sizes, image properties, sample grids
     bmad_dinomaly2_train.ipynb      # BMAD: Dinomaly2 (1-7) + AnomalyDINO-DPMM (8-9) runs + report
+  pdd/
+    pdd_train.ipynb                 # PDD: HeadCT/ZhangLab/BrainMRI/CheXpert/Uni-Medical runs + paper tables
 runs/                  # training checkpoints/logs, gitignored
 src/
   data/
     cbis_ddsm.py       # CBIS-DDSM loading, patient-level split
     mvtec_visa.py      # MVTec-AD / VisA loading (reuses Dinomaly2's dataset.py)
     bmad.py             # BMAD loading, per-modality quirks
+    pdd_datasets.py     # PDD datasets: download, paper splits, Uni-Medical meta.json
   models/
     dinomaly.py        # Dinomaly v1 build (CBIS-DDSM)
     dinomaly2.py        # Dinomaly2 build (MVTec-AD / VisA / BMAD, same by default; optional target_layers override for BMAD's architecture iteration)
@@ -206,21 +244,25 @@ src/
     _ref.py / _ref2.py   # bridges to the vendored Dinomaly / Dinomaly2 repos
     dpmm.py               # AnomalyDINO-DPMM: the Dirichlet Process Mixture itself
     anomaly_dpmm.py        # AnomalyDINO-DPMM: frozen DINOv2 patch embedding extraction
+    pdd.py                  # PDD: imports the official code from PDD/, Mac patches, chunked scan
   training/
     train_dinomaly.py    # CBIS-DDSM training loop
     train_dinomaly2.py   # MVTec-AD / VisA reproduction training loop
     train_bmad.py         # BMAD training loop, one model per modality
     train_bmad_dpmm.py     # BMAD training loop for AnomalyDINO-DPMM, one DPMM per modality
+    train_pdd.py            # PDD training loop (official recipe), teacher cache, resume
   eval/
     anomaly.py           # image-level scoring (CBIS-DDSM; also used by pixel.py)
     pixel.py              # pixel-level metrics incl. AUPRO (MVTec-AD / VisA)
     bmad.py               # image-level always, pixel-level only where BMAD has masks
     bmad_dpmm.py            # same as bmad.py, scored from the DPMM's log-likelihood map
     bmad_dpmm_paper.py      # DPMM checkpoints re-scored the way the paper's code does
+    pdd.py                  # PDD scoring: per-image and the official single-class batch metric
 third_party/
   Dinomaly/              # v1 reference implementation, git submodule
   Dinomaly2/              # v2 reference implementation, git submodule
 anomalydino-dpmm/        # AnomalyDINO-DPMM reference implementation (not yet a submodule)
+PDD/                     # PDD official code (OxygenLu/PDD), cloned, imported by src/models/pdd.py
 ```
 
 ## Setup
