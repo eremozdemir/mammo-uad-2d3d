@@ -7,3 +7,6 @@
 [submodule "anomalydino-dpmm"]
 	path = anomalydino-dpmm
 	url = https://github.com/NicoSchulthess/anomalydino-dpmm.git
+[submodule "PDD"]
+	path = PDD
+	url = https://github.com/OxygenLu/PDD.git
